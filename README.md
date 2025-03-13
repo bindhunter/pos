@@ -1,6 +1,10 @@
 # Commerce demo built on top of the bindpay api
 
-Overivew: Build payment flows moving money freely through crypto, stables & fiat at below market rates with the bindpay api. https://bindpay.xyz
+Try out deployed version: https://commerce-nine-alpha-48.vercel.app/
+
+Sandbox coming soon.
+
+Overivew: Build payment flows moving money freely through crypto, stables & fiat at below market rates with the bindpay api.
 
 Features
 
@@ -47,7 +51,8 @@ Creating a Test Merchant
 - After creating a merchant, connect your wallet
 - Enter the payment amount
 - Select a payment method (token and network)
-- Complete the payment
+
+Complete the payment. https://docs.bindpay.xyz/api/request-quote
 
 # Architecture
 
