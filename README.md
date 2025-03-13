@@ -1,10 +1,8 @@
-# Commerce demo built on top of the bindpay api
+# On-chain Commerce Demo
 
-Try out deployed version: https://commerce-nine-alpha-48.vercel.app/
+Try out deployed version: https://commerce-nine-alpha-48.vercel.app/ Sandbox coming soon.
 
-Sandbox coming soon.
-
-Overivew: Build payment flows moving money freely through crypto, stables & fiat at below market rates with the bindpay api.
+Overivew: Creating a merchant account & checkout flow demo powered by bindpay api
 
 Features
 
@@ -25,14 +23,10 @@ git clone https://github.com/bindhunter/commerce.git
 cd commerce
 
 # Install dependencies
-npm install
-# or
-yarn install
+npm install or yarn install
 
 # Start the development server
-npm run dev
-# or
-yarn dev
+npm run dev or yarn dev
 
 The application will be available at http://localhost:3000.
 
@@ -45,7 +39,7 @@ Creating a Test Merchant
 - Settlement Token
 - Wallet Address
   
-  Click "Create Merchant" & your subpayee will be generated. https://docs.bindpay.xyz/sub-payees/create-sub-payee
+Click "Create Merchant" & your subpayee will be generated. https://docs.bindpay.xyz/sub-payees/create-sub-payee
 
 2. Testing Payments
 - After creating a merchant, connect your wallet
