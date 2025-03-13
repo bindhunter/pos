@@ -17,6 +17,7 @@ Prerequisites
 - Node.js 18+
 - npm or yarn
 - A web3 wallet (MetaMask, Coinbase Wallet, etc.)
+- bindpay subpayee creation api key 
 
 # Clone the repository
 git clone https://github.com/bindhunter/commerce.git
