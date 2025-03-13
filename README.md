@@ -1,6 +1,6 @@
 # On-chain Commerce Demo
 
-Try out deployed version: https://commerce-nine-alpha-48.vercel.app/ Sandbox coming soon.
+Try out deployed version: https://commerce-bindpay.vercel.app/ Sandbox coming soon.
 
 Overivew: Creating a merchant account & checkout flow demo powered by bindpay api
 
