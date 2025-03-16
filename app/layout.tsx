@@ -6,7 +6,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import Header from "@/components/header"
 import Footer from "@/components/footer"
-import { ClientProviders } from "@/components/providers"
+import { AppKitProvider } from "@/components/providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -25,7 +25,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={cn("min-h-screen bg-background antialiased", inter.className)}>
-        <ClientProviders>
+        <AppKitProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
             <div className="flex min-h-screen flex-col">
               <Header />
@@ -35,7 +35,7 @@ export default function RootLayout({
               <Footer />
             </div>
           </ThemeProvider>
-        </ClientProviders>
+        </AppKitProvider>
       </body>
     </html>
   )

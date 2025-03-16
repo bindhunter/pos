@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SettleForm } from "@/components/settle-form"
 import { CreateMerchant } from "@/components/subpayee/CreateMerchant"
-import { useAccount, useConnect } from 'wagmi';
-import { Button } from "@/components/ui/button";
+import { useAccount } from 'wagmi';
 import { toast } from "sonner";
 import { getNetworkName, getTokenSymbol } from '@/lib/token-chain-parser';
 import { ChainId } from '@/constants/ChainToken';
@@ -22,7 +21,28 @@ export default function Dashboard() {
   } | null>(null);
   
   const { address, isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
+  
+  // Listen for wallet connection events from Reown
+  useEffect(() => {
+    const handleWalletConnected = () => {
+      toast.success('Wallet connected successfully');
+    };
+    
+    // Add event listener for Reown's connection event
+    document.addEventListener('appkit:connected', handleWalletConnected);
+    
+    return () => {
+      document.removeEventListener('appkit:connected', handleWalletConnected);
+    };
+  }, []);
+
+  // Add this useEffect to detect when wallet is connected via the address
+  useEffect(() => {
+    if (address && isConnected && merchantData) {
+      // If wallet is connected and merchant data exists, show a success toast
+      toast.success('Wallet connected successfully');
+    }
+  }, [address, isConnected, merchantData]);
 
   const handleMerchantCreated = (merchantData: any) => {
     console.log('Merchant created callback received:', merchantData);
@@ -37,6 +57,22 @@ export default function Dashboard() {
     });
     
     toast.success('Merchant created successfully');
+    
+    // If merchant is created but wallet not connected, prompt user to connect
+    if (!isConnected) {
+      toast.info('Connect your wallet to test the checkout', {
+        action: {
+          label: 'Connect',
+          onClick: () => {
+            // Trigger Reown connect modal programmatically
+            const connectButton = document.querySelector('appkit-connect-button');
+            if (connectButton) {
+              (connectButton as any).click();
+            }
+          }
+        }
+      });
+    }
   };
 
   const networkName = merchantData?.settlementDetails?.network ? 
@@ -44,16 +80,6 @@ export default function Dashboard() {
   
   const tokenSymbol = merchantData?.settlementDetails?.token ? 
     getTokenSymbol(merchantData.settlementDetails.token as any, merchantData.settlementDetails.network as unknown as ChainId) : '';
-
-  const handleConnect = () => {
-    // Find the first available connector (usually MetaMask)
-    const connector = connectors[0];
-    if (connector) {
-      connect({ connector });
-    } else {
-      toast.error('No wallet connectors available');
-    }
-  };
 
   return (
     <main className="container py-8 md:py-12">
@@ -79,9 +105,9 @@ export default function Dashboard() {
               )}
               
               {!isConnected && (
-                <Button onClick={handleConnect} className="w-full">
-                  Connect Wallet to Test
-                </Button>
+                <div className="w-full mt-4">
+                  <p className="text-sm text-muted-foreground mb-2">Connect your wallet to test the checkout flow.</p>
+                </div>
               )}
             </div>
           )}
@@ -90,7 +116,21 @@ export default function Dashboard() {
         <div className="col-span-1">
           {merchantData ? (
             <div className="bg-card p-6 rounded-lg border border-border">
-              <h2 className="text-xl font-bold mb-4">Test Checkout</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">Test Checkout</h2>
+                {!isConnected && (
+                  <div className="flex items-center">
+                    {/* Empty div for layout consistency */}
+                  </div>
+                )}
+                {isConnected && (
+                  <div className="flex items-center">
+                    <span className="text-sm text-green-500 mr-2">Wallet connected</span>
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                  </div>
+                )}
+              </div>
+              
               {isConnected ? (
                 <SettleForm 
                   walletAddress={address || ""} 
@@ -98,9 +138,11 @@ export default function Dashboard() {
                   merchantData={merchantData}
                 />
               ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">Connect your wallet to test the checkout</p>
-                  <Button onClick={handleConnect}>Connect Wallet</Button>
+                <div className="text-center py-8 border border-dashed border-border rounded-lg">
+                  <p className="text-muted-foreground mb-4">You need to connect your wallet to test the checkout</p>
+                  <div className="flex justify-center">
+                    <appkit-connect-button label="Connect Wallet"/>
+                  </div>
                 </div>
               )}
             </div>

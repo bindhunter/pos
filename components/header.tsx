@@ -39,9 +39,10 @@ export default function Header() {
         </div>
         <div className="flex items-center gap-4">
           <ThemeToggle />
-          <Button size="sm" asChild className="bg-secondary">
+          <appkit-account-button balance='hide'/>
+          {/* <Button size="sm" asChild className="bg-secondary">
             <Link href="https://docs.bindpay.xyz" target="_blank" className="text-foreground">Documents</Link>
-          </Button>
+          </Button> */}
         </div>
       </div>
     </header>

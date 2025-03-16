@@ -8,7 +8,7 @@ import { QuoteResponse } from '@/hooks/usebindpay-quote';
 import { motion } from 'framer-motion'; 
 
 interface PaymentConfirmationProps {
-  quote: QuoteResponse | any; // Make more flexible for different response structures
+  quote: QuoteResponse | any; // This 'any' type is problematic and should be more specific
   recipientName: string;
   isProcessing: boolean;
   onConfirm: () => void;
@@ -198,9 +198,16 @@ export function PaymentConfirmation({
           </div>
           
           {actualQuote.fees && (
-            <div className="text-sm">
+            <div className="text-sm space-y-2 mt-2">
               {actualQuote.fees.gas && (
                 <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Gas fee</span>
+                  <span>{formatFee(
+                    Array.isArray(actualQuote.fees.gas) 
+                      ? actualQuote.fees.gas.reduce((sum, fee) => sum + (parseFloat(fee) || 0), 0)
+                      : actualQuote.fees.gas, 
+                    fromSymbol
+                  )}</span>
                 </div>
               )}
               
@@ -213,10 +220,24 @@ export function PaymentConfirmation({
               
               {actualQuote.fees.integrator !== undefined && (
                 <div className="flex justify-between items-center">
-                  <span className={parseFloat(actualQuote.fees.integrator.toString()) < 0 ? "text-green-500" : ""}>
+                  <span className="text-muted-foreground">
+                    {parseFloat(String(actualQuote.fees.integrator)) < 0 
+                      ? "Discount" 
+                      : "Service fee"}
+                  </span>
+                  <span className={parseFloat(String(actualQuote.fees.integrator)) < 0 
+                    ? "text-green-500" 
+                    : ""}>
+                    {parseFloat(String(actualQuote.fees.integrator)) < 0 ? "-" : ""}
+                    {formatFee(Math.abs(parseFloat(String(actualQuote.fees.integrator))), fromSymbol)}
                   </span>
                 </div>
               )}
+              
+              <div className="flex justify-between items-center pt-1 mt-1 border-t border-border">
+                <span className="font-medium">Total</span>
+                <span className="font-medium">{formatCurrency(calculateTotal(actualQuote))} {fromSymbol}</span>
+              </div>
             </div>
           )}
         </div>

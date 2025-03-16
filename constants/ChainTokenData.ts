@@ -137,13 +137,13 @@ export const tokens: Partial<Record<ChainId, Token[]>> = {
     //   decimals: 18,
     //   logoUrl: '/tokens/usdg.svg',
     // },
-    // {
-    //   symbol: 'BRZ',
-    //   name: 'Brazilian Stable',
-    //   address: '0x420412E765BFa6d85aaaC94b4f7b708C89be2e2B' as Address,
-    //   decimals: 18,
-    //   logoUrl: '/tokens/brz.svg',
-    // },
+    {
+      symbol: 'BRZ',
+      name: 'Brazilian Stable',
+      address: '0x01d33fd36ec67c6ada32cf36b31e88ee190b1839' as Address,
+      decimals: 18,
+      logoUrl: '/tokens/brz.svg',
+    },
   ],
   [ChainId.OPTIMISM]: [
     {
@@ -217,6 +217,13 @@ export const tokens: Partial<Record<ChainId, Token[]>> = {
       address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2' as Address,
       decimals: 6,
       logoUrl: '/tokens/usdt.svg',
+    },
+    {
+      symbol: 'BRZ',
+      name: 'Brazilian Stable',
+      address: '0xE9185Ee218cae427aF7B9764A011bb89FeA761B4' as Address,
+      decimals: 18,
+      logoUrl: '/tokens/brz.svg',
     },
   ],
   [ChainId.ARBITRUM]: [
@@ -389,13 +396,13 @@ export const tokens: Partial<Record<ChainId, Token[]>> = {
       decimals: 6,
       logoUrl: '/tokens/usdt.svg',
     },
-    // {
-    //   symbol: 'BRZ',
-    //   name: 'Brazilian Stable',
-    //   address: '0x4eD141110F6EeeAbA9A1df36d8c26f684d2475Dc' as Address,
-    //   decimals: 18,
-    //   logoUrl: '/tokens/brz.svg',
-    // },
+    {
+      symbol: 'BRZ',
+      name: 'Brazilian Stable',
+      address: '0x4ed141110f6eeeaba9a1df36d8c26f684d2475dc' as Address,
+      decimals: 18,
+      logoUrl: '/tokens/brz.svg',
+    },
     {
       symbol: 'ETH',
       name: 'Wrapped Eth',

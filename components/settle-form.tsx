@@ -23,6 +23,7 @@ import { ProgressButton } from '@/components/ui/progress-button';
 import { ChevronsUpDown } from 'lucide-react';
 import { chains, tokens } from '@/constants/ChainTokenData';
 import { PaymentConfirmation } from './payment-confirmation';
+import { PaymentSuccess } from './payment-success';
 
 interface SettleFormProps {
   walletAddress: string;
@@ -55,6 +56,16 @@ export function SettleForm({ walletAddress, userId, merchantData }: SettleFormPr
   const [isProcessingTransaction, setIsProcessingTransaction] = useState(false);
   const [showWalletRequired, setShowWalletRequired] = useState(false);
   const [isInitialRender, setIsInitialRender] = useState(true);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [transactionDetails, setTransactionDetails] = useState<{
+    transactionId: string;
+    fromAmount: string;
+    fromSymbol: string;
+    toAmount: string;
+    toSymbol: string;
+    explorerUrl?: string;
+    recipientName: string;
+  } | null>(null);
 
   const currentChainId = useChainId();
 
@@ -135,21 +146,19 @@ export function SettleForm({ walletAddress, userId, merchantData }: SettleFormPr
   };
 
   const handleTransaction = async (quote: QuoteResponse) => {
-    if (!walletClient || !isConnected) {
-      toast.error('Wallet not connected', {
-        classNames: {
-          toast: 'bg-card border border-border text-foreground',
-          title: 'text-foreground font-medium',
-          description: 'text-gray-400',
-        },
-      });
-      return;
+    if (!isConnected) {
+      toast.error('Wallet not connected');
+      return { success: false };
     }
 
     try {
-      let hash: `0x${string}`;
-
+      // Step 1: Handle approval transaction if needed
       if (quote.approvalTxParams) {
+        toast.info('Approving token spend...', {
+          duration: 10000,
+          id: 'approval-toast'
+        });
+        
         console.log('Sending approval transaction...');
         const approvalHash = await walletClient.sendTransaction({
           account: quote.approvalTxParams.from,
@@ -162,18 +171,29 @@ export function SettleForm({ walletAddress, userId, merchantData }: SettleFormPr
         });
 
         console.log('Approval transaction sent:', approvalHash);
+        
+        // Wait for approval to be confirmed
         await publicClient?.waitForTransactionReceipt({ hash: approvalHash });
         console.log('Approval transaction confirmed');
+        
+        toast.success('Token approval confirmed. Proceeding with transaction...', {
+          id: 'approval-toast'
+        });
       }
 
-      // Send the main transaction
+      // Step 2: Send the main transaction
       const txParams = quote.transferTxParams || quote.transactionRequest;
       if (!txParams) {
         throw new Error('No transaction parameters found');
       }
 
+      toast.info('Sending payment...', {
+        duration: 10000,
+        id: 'transaction-toast'
+      });
+      
       console.log('Sending main transaction...');
-      hash = await walletClient.sendTransaction({
+      const transferHash = await walletClient.sendTransaction({
         account: txParams.from,
         to: txParams.to,
         data: txParams.data,
@@ -183,13 +203,26 @@ export function SettleForm({ walletAddress, userId, merchantData }: SettleFormPr
         nonce: 'nonce' in txParams ? Number(txParams.nonce) : undefined,
       });
 
-      console.log('Main transaction sent:', hash);
-      const receipt = await publicClient?.waitForTransactionReceipt({ hash });
+      console.log('Payment transaction sent:', transferHash);
+      
+      // Wait for the main transaction to be confirmed
+      const receipt = await publicClient?.waitForTransactionReceipt({ hash: transferHash });
+      console.log('Payment transaction confirmed:', receipt);
+      
+      toast.success('Payment confirmed!', {
+        id: 'transaction-toast'
+      });
 
-      return receipt?.transactionHash;
+      return { 
+        success: true, 
+        transferHash 
+      };
     } catch (error: any) {
       console.error('Transaction failed:', error);
-      throw new Error(error.message || 'Transaction failed');
+      toast.error(`Transaction failed: ${error.message || 'Unknown error'}`, {
+        id: 'transaction-toast'
+      });
+      return { success: false, error: error.message };
     }
   };
 
@@ -255,55 +288,79 @@ export function SettleForm({ walletAddress, userId, merchantData }: SettleFormPr
     }
   };
 
-  // Add a new function to handle the confirmed transaction
+  // Helper function to format currency values with safety checks
+  const formatCurrency = (value: number | string | undefined, symbol = '') => {
+    if (value === undefined || value === null) return `${symbol}0`;
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return `${symbol}0`;
+    
+    // Format based on size of number
+    if (Math.abs(numValue) < 0.000001) {
+      return `${symbol}${numValue.toExponential(6)}`;
+    } else if (Math.abs(numValue) < 0.001) {
+      return `${symbol}${numValue.toFixed(6)}`;
+    } else if (Math.abs(numValue) < 1) {
+      return `${symbol}${numValue.toFixed(4)}`;
+    } else if (Math.abs(numValue) < 1000) {
+      return `${symbol}${numValue.toFixed(2)}`;
+    } else {
+      return `${symbol}${numValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+    }
+  };
+
+  // Helper to safely get token amount with decimals
+  const getTokenAmount = (amount: string | undefined, decimals: number | undefined) => {
+    if (!amount || decimals === undefined) return 0;
+    try {
+      return parseFloat(amount) / Math.pow(10, decimals);
+    } catch (e) {
+      console.error("Error calculating token amount:", e);
+      return 0;
+    }
+  };
+
+  // Helper function to get explorer URL
+  const getExplorerUrl = (txId: string, chainId?: ChainId) => {
+    if (!txId || !chainId) return undefined;
+    
+    const chain = chains[chainId];
+    if (!chain || !chain.blockExplorerUrl) return undefined;
+    
+    return `${chain.blockExplorerUrl}/tx/${txId}`;
+  };
+
+  // Update the handleConfirmedTransaction function to properly get the amount
   const handleConfirmedTransaction = async () => {
-    if (!currentQuote) return;
+    setIsProcessingTransaction(true);
     
     try {
-      setIsProcessingTransaction(true);
-      
-      const transactionHash = await handleTransaction(currentQuote);
+      const result = await handleTransaction(currentQuote);
 
-      if (!transactionHash) {
-        throw new Error('Transaction failed');
+      if (!result.success || !result.transferHash) {
+        throw new Error(result.error || 'Transaction failed');
       }
 
-      // Only proceed with DB updates after transaction is confirmed
+      // Get the actual amount from the form or quote
       const { token, chain } = form.getValues('settlementDetails');
       const selectedFriend = form.getValues('selectedFriend');
-      const usdAmount = form.getValues('amount');
+      const usdAmount = form.getValues('amount'); // This is the user-entered amount
       
-      const paymentParams = {
-        fromUserId: userId,
-        toUserId: selectedFriend.id,
-        fromChain: chain.id.toString(),
-        toChain: chain.id.toString(),
-        fromToken: token.address,
-        toToken: token.address,
-        fromAmount: currentQuote.transferTxParams?.value,
-        toAmount: currentQuote.transferTxParams?.value,
-        usdAmount: usdAmount,
-        fromAddress: walletAddress,
-        toAddress: selectedFriend.walletAddress,
-        transactionHash: transactionHash as string,
-        fromTokenSymbol: token.symbol,
-        toTokenSymbol: token.symbol,
-        fromTokenDecimals: token.decimals,
-        toTokenDecimals: token.decimals,
-        tool: 'BINDPAY',
-        toolName: 'BindPay',
-        estimatedGasCost: currentQuote.transferTxParams?.gas,
-      };
-
-      toast.success('Payment Successful');
-      router.push(`/direct/history`);
-      router.refresh();
+      // Use the actual amount entered by the user rather than trying to parse it from the quote
+      setTransactionDetails({
+        transactionId: result.transferHash,
+        fromAmount: usdAmount, // Use the actual amount entered by the user
+        fromSymbol: token.symbol,
+        explorerUrl: getExplorerUrl(result.transferHash, chain.id),
+        recipientName: selectedFriend?.name || '',
+      });
+      
+      // Show success modal
+      setShowSuccessModal(true);
+      
     } catch (error: any) {
       console.error('Transaction error:', error);
-      setIsProcessingTransaction(false);
-      toast.error(error instanceof Error ? error.message : 'An unexpected error occurred');
+      toast.error('Transaction failed. Please try again.');
     } finally {
-      setCurrentQuote(null);
       setIsProcessingTransaction(false);
     }
   };
@@ -443,6 +500,17 @@ export function SettleForm({ walletAddress, userId, merchantData }: SettleFormPr
         <div className="w-full max-w-[600px] flex flex-col mx-auto md:flex-row items-start gap-4 py-4">
           {/* Left side - Form */}
           <div className="flex-1 w-full flex flex-col gap-4">
+            {/* Add a connection status indicator at the top of the form */}
+            {!isConnected && (
+              <div className="mb-4 p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
+                <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  Please connect your wallet to complete the transaction
+                </p>
+              </div>
+            )}
             <form onSubmit={handleSubmit(onSubmit)} className="flex-1 w-full flex flex-col gap-4 p-4 rounded-lg">
               {/* Amount Input */}
               <FormField
@@ -561,6 +629,22 @@ export function SettleForm({ walletAddress, userId, merchantData }: SettleFormPr
           />
         </DialogContent>
       </Dialog>
+
+      {showSuccessModal && (
+        <PaymentSuccess
+          transactionId={transactionDetails?.transactionId || ''}
+          fromAmount={transactionDetails?.fromAmount || ''}
+          fromSymbol={transactionDetails?.fromSymbol || ''}
+          toAmount={transactionDetails?.toAmount || ''}
+          toSymbol={transactionDetails?.toSymbol || ''}
+          recipientName={transactionDetails?.recipientName || ''}
+          explorerUrl={transactionDetails?.explorerUrl}
+          onClose={() => {
+            setShowSuccessModal(false);
+            setTransactionDetails(null);
+          }}
+        />
+      )}
     </>
   );
 }
