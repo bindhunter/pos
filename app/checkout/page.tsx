@@ -215,14 +215,3 @@ export default function CheckoutPage() {
     </Suspense>
   );
 }
-
-export const metadata = {
-  title: 'Your App Title',
-  description: 'Your app description',
-};
-
-export const viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 1,
-};
