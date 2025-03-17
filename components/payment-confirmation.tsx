@@ -8,7 +8,7 @@ import { QuoteResponse } from '@/hooks/usebindpay-quote';
 import { motion } from 'framer-motion'; 
 
 interface PaymentConfirmationProps {
-  quote: QuoteResponse | any; // This 'any' type is problematic and should be more specific
+  quote: QuoteResponse | any;
   recipientName: string;
   isProcessing: boolean;
   onConfirm: () => void;
@@ -53,62 +53,9 @@ export function PaymentConfirmation({
     }
   };
   
-  // Helper to calculate total with fees
-  const calculateTotal = (quote: QuoteResponse) => {
-    if (!quote || !quote.fees || !quote.fromToken || quote.fromToken.decimals === undefined) return 0;
-    
-    try {
-      const fromAmount = getTokenAmount(quote.fromAmount, quote.fromToken.decimals);
-      
-      // Handle different fee structures
-      let totalFees = 0;
-      
-      if (quote.fees.bridge) {
-        totalFees += typeof quote.fees.bridge === 'number' ? quote.fees.bridge : 0;
-      }
-      
-      if (quote.fees.gas) {
-        // Handle gas as array or string
-        if (Array.isArray(quote.fees.gas)) {
-          // Sum up gas fees if it's an array
-          totalFees += quote.fees.gas.reduce((sum, fee) => sum + (parseFloat(fee) || 0), 0);
-        } else {
-          totalFees += parseFloat(quote.fees.gas) || 0;
-        }
-      }
-      
-      if (quote.fees.integrator) {
-        totalFees += parseFloat(quote.fees.integrator.toString()) || 0;
-      }
-      
-      return fromAmount + totalFees;
-    } catch (e) {
-      console.error("Error calculating total:", e);
-      return 0;
-    }
-  };
-
-  // Helper function specifically for fee display
-  const formatFee = (value: number | string | undefined, symbol = '') => {
-    if (value === undefined || value === null) return `${symbol}0`;
-    const numValue = typeof value === 'string' ? parseFloat(value) : value;
-    if (isNaN(numValue)) return `${symbol}0`;
-    
-    // For zero values, just show 0
-    if (numValue === 0) return `0 ${symbol}`;
-    
-    // For very small values (like gas fees)
-    if (Math.abs(numValue) < 0.000001) {
-      return `${numValue.toFixed(8)} ${symbol}`;
-    }
-    
-    // For normal values
-    return `${numValue.toFixed(4)} ${symbol}`;
-  };
-
   // Handle nested quote structure if needed
   const actualQuote = quote.quote || quote;
-
+  
   // Safety check for required quote properties
   if (!actualQuote || !actualQuote.fromToken || !actualQuote.toToken) {
     console.error("Invalid quote data:", actualQuote);
@@ -120,32 +67,56 @@ export function PaymentConfirmation({
   }
 
   // Safely access token symbols
-  const fromSymbol = actualQuote.fromToken?.symbol || 'Token';
-  const toSymbol = actualQuote.toToken?.symbol || 'Token';
+  const fromSymbol = actualQuote.fromToken?.symbol || 'Unknown';
+  const toSymbol = actualQuote.toToken?.symbol || 'Unknown';
   
-  // Calculate USD values if available
+  // Safely calculate token amounts
+  const fromAmountValue = getTokenAmount(
+    actualQuote.fromAmount,
+    actualQuote.fromToken?.decimals
+  );
+  
+  const toAmountValue = getTokenAmount(
+    actualQuote.toAmount,
+    actualQuote.toToken?.decimals
+  );
+  
+  // Safely get token prices
   const fromTokenPrice = actualQuote.fromToken?.price || 0;
   const toTokenPrice = actualQuote.toToken?.price || 0;
   
-  const fromAmountValue = getTokenAmount(actualQuote.fromAmount, actualQuote.fromToken?.decimals);
-  const toAmountValue = getTokenAmount(actualQuote.toAmount, actualQuote.toToken?.decimals);
-  
+  // Calculate USD values
   const fromAmountUsd = fromAmountValue * fromTokenPrice;
   const toAmountUsd = toAmountValue * toTokenPrice;
+  
+  // Helper function for fee display
+  const formatFee = (value: number | string | undefined, symbol = '') => {
+    if (value === undefined || value === null) return `0 ${symbol}`;
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return `0 ${symbol}`;
+    
+    // For zero values, just show 0
+    if (numValue === 0) return `0 ${symbol}`;
+    
+    // For very small values (like gas fees)
+    if (Math.abs(numValue) < 0.000001) {
+      return `${numValue.toExponential(6)} ${symbol}`;
+    } else if (Math.abs(numValue) < 0.001) {
+      return `${numValue.toFixed(6)} ${symbol}`;
+    } else if (Math.abs(numValue) < 1) {
+      return `${numValue.toFixed(4)} ${symbol}`;
+    } else {
+      return `${numValue.toFixed(4)} ${symbol}`;
+    }
+  };
 
   return (
     <motion.div 
-      className="space-y-4 mt-4 border border-border rounded-xl p-4 bg-background"
-      initial={{ opacity: 0, y: -10 }}
+      className="space-y-4 p-4"
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium">Payment Details</h3>
-        <span className="text-sm text-muted-foreground">
-          via {actualQuote.provider} {actualQuote.subProvider ? `(${actualQuote.subProvider})` : ''}
-        </span>
-      </div>
       
       {/* Payment summary */}
       <div className="flex flex-col gap-3">
@@ -189,59 +160,6 @@ export function PaymentConfirmation({
         </div>
       </div>
       
-      {/* Fee breakdown - updated styling */}
-      <div className="rounded-lg bg-secondary/30 border border-border">
-        <div className="p-4">
-          <div className="flex items-center gap-1">
-            <Info size={16} className="text-muted-foreground" />
-            <h3 className="font-medium">Fee Breakdown</h3>
-          </div>
-          
-          {actualQuote.fees && (
-            <div className="text-sm space-y-2 mt-2">
-              {actualQuote.fees.gas && (
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Gas fee</span>
-                  <span>{formatFee(
-                    Array.isArray(actualQuote.fees.gas) 
-                      ? actualQuote.fees.gas.reduce((sum, fee) => sum + (parseFloat(fee) || 0), 0)
-                      : actualQuote.fees.gas, 
-                    fromSymbol
-                  )}</span>
-                </div>
-              )}
-              
-              {actualQuote.fees.bridge && (
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Bridge fee</span>
-                  <span>{formatFee(actualQuote.fees.bridge, fromSymbol)}</span>
-                </div>
-              )}
-              
-              {actualQuote.fees.integrator !== undefined && (
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">
-                    {parseFloat(String(actualQuote.fees.integrator)) < 0 
-                      ? "Discount" 
-                      : "Service fee"}
-                  </span>
-                  <span className={parseFloat(String(actualQuote.fees.integrator)) < 0 
-                    ? "text-green-500" 
-                    : ""}>
-                    {parseFloat(String(actualQuote.fees.integrator)) < 0 ? "-" : ""}
-                    {formatFee(Math.abs(parseFloat(String(actualQuote.fees.integrator))), fromSymbol)}
-                  </span>
-                </div>
-              )}
-              
-              <div className="flex justify-between items-center pt-1 mt-1 border-t border-border">
-                <span className="font-medium">Total</span>
-                <span className="font-medium">{formatCurrency(calculateTotal(actualQuote))} {fromSymbol}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
       
       {/* Action buttons */}
       <div className="flex gap-2 pt-2">

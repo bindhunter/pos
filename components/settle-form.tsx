@@ -24,6 +24,8 @@ import { ChevronsUpDown } from 'lucide-react';
 import { chains, tokens } from '@/constants/ChainTokenData';
 import { PaymentConfirmation } from './payment-confirmation';
 import { PaymentSuccess } from './payment-success';
+import { QRCodeSVG } from 'qrcode.react';
+import { getNetworkName, getTokenSymbol } from '@/lib/token-chain-parser';
 
 interface SettleFormProps {
   walletAddress: string;
@@ -36,11 +38,21 @@ interface SettleFormProps {
     settlementDetails?: {
       token: string;
       network: string;
-    };
+    }
   };
+  merchantInitiated?: boolean;
+  presetAmount?: number;
+  sessionId?: string | null;
 }
 
-export function SettleForm({ walletAddress, userId, merchantData }: SettleFormProps) {
+export function SettleForm({ 
+  walletAddress, 
+  userId, 
+  merchantData,
+  merchantInitiated = false,
+  presetAmount,
+  sessionId
+}: SettleFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showTokenSelector, setShowTokenSelector] = useState(false);
@@ -66,6 +78,9 @@ export function SettleForm({ walletAddress, userId, merchantData }: SettleFormPr
     explorerUrl?: string;
     recipientName: string;
   } | null>(null);
+  const [merchantAmount, setMerchantAmount] = useState<string>('');
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [isGeneratingPayment, setIsGeneratingPayment] = useState(false);
 
   const currentChainId = useChainId();
 
@@ -213,9 +228,13 @@ export function SettleForm({ walletAddress, userId, merchantData }: SettleFormPr
         id: 'transaction-toast'
       });
 
+      // Add sessionId to transaction metadata if available
+      const metadata = sessionId ? { sessionId } : undefined;
+
       return { 
         success: true, 
-        transferHash 
+        transferHash,
+        metadata
       };
     } catch (error: any) {
       console.error('Transaction failed:', error);
@@ -494,116 +513,194 @@ export function SettleForm({ walletAddress, userId, merchantData }: SettleFormPr
     }
   }, [merchantData, setValue]);
 
+  // Use presetAmount if provided
+  useEffect(() => {
+    if (presetAmount && presetAmount > 0) {
+      setValue('amount', presetAmount);
+    }
+  }, [presetAmount, setValue]);
+
+  // Add a function to generate payment URL for merchant-initiated flow
+  const generatePaymentUrl = () => {
+    if (!merchantAmount || parseFloat(merchantAmount) <= 0) {
+      toast.error("Please enter a valid amount greater than 0");
+      return;
+    }
+
+    setIsGeneratingPayment(true);
+
+    try {
+      // Create a unique session ID for this payment
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      
+      // Base URL for your payment page
+      const baseUrl = window.location.origin;
+      
+      // Create URL with parameters
+      const url = new URL(`${baseUrl}/checkout`);
+      url.searchParams.append('amount', merchantAmount);
+      url.searchParams.append('merchantId', merchantData?.id || '');
+      url.searchParams.append('merchantName', merchantData?.name || '');
+      url.searchParams.append('sessionId', sessionId);
+      
+      // Add settlement details if available
+      if (merchantData?.settlementDetails) {
+        url.searchParams.append('token', merchantData.settlementDetails.token);
+        url.searchParams.append('network', merchantData.settlementDetails.network);
+      }
+      
+      // Set the payment URL for QR code generation
+      setPaymentUrl(url.toString());
+      setIsGeneratingPayment(false);
+      
+      // Store session data in localStorage for status tracking
+      localStorage.setItem(`payment_${sessionId}`, JSON.stringify({
+        amount: merchantAmount,
+        merchantId: merchantData?.id,
+        merchantName: merchantData?.name,
+        timestamp: Date.now(),
+        status: 'pending'
+      }));
+    } catch (error) {
+      console.error('Error generating payment URL:', error);
+      toast.error("Failed to generate payment URL");
+      setIsGeneratingPayment(false);
+    }
+  };
+  
+  // Function to reset payment state
+  const resetPayment = () => {
+    setPaymentUrl(null);
+    setMerchantAmount('');
+  };
+
+  // Add this function to handle the confirmation
+  const handleConfirmPayment = async () => {
+    if (!currentQuote) return;
+    
+    setIsProcessingTransaction(true);
+    try {
+      // Your payment processing logic here
+      // ...
+      
+      // After successful payment:
+      setTransactionDetails({
+        transactionId: "tx_id_here", // Replace with actual tx ID
+        fromAmount: currentQuote.fromAmount,
+        fromSymbol: currentQuote.fromToken.symbol,
+        toAmount: currentQuote.toAmount,
+        toSymbol: currentQuote.toToken.symbol,
+        recipientName: selectedFriend.name || merchantData?.name || "Recipient",
+        explorerUrl: "https://explorer.url/tx/..." // Replace with actual explorer URL
+      });
+      
+      setShowSuccessModal(true);
+      setCurrentQuote(null);
+    } catch (error) {
+      console.error("Payment error:", error);
+      toast.error("Payment failed. Please try again.");
+    } finally {
+      setIsProcessingTransaction(false);
+    }
+  };
+
+  // Add this function to handle cancellation
+  const handleCancelPayment = () => {
+    setCurrentQuote(null);
+  };
+
   return (
     <>
       <Form {...form}>
-        <div className="w-full max-w-[600px] flex flex-col mx-auto md:flex-row items-start gap-4 py-4">
-          {/* Left side - Form */}
-          <div className="flex-1 w-full flex flex-col gap-4">
-            {/* Add a connection status indicator at the top of the form */}
-            {!isConnected && (
-              <div className="mb-4 p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
-                <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  Please connect your wallet to complete the transaction
-                </p>
-              </div>
-            )}
-            <form onSubmit={handleSubmit(onSubmit)} className="flex-1 w-full flex flex-col gap-4 p-4 rounded-lg">
-              {/* Amount Input */}
-              <FormField
-                control={control}
-                name="amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <div className="relative">
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-medium">$</div>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={field.value ? field.value.toFixed(2) : '0.00'}
-                          onChange={(e) => {
-                            const input = e.target.value.replace(/[^\d]/g, '');
-                            const numericValue = parseInt(input, 10);
-                            field.onChange(!input ? 0 : numericValue / 100);
-                          }}
-                          className="h-16 pl-8 mx-2 text-4xl font-medium rounded-xl bg-background border-border"
-                          style={{ fontSize: '28px' }}
-                          disabled={isSettlingRequest || !!currentQuote}
-                          onFocus={(e) => !isSettlingRequest && e.target.select()}
-                        />
+        <div className="space-y-4">
+          {/* Only show the amount input field if NOT merchant initiated */}
+          {!merchantInitiated ? (
+            <FormField
+              control={form.control}
+              name="amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <span className="text-gray-500">$</span>
                       </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Payment Method Selection */}
-              <FormField
-                control={control}
-                name="settlementDetails"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full h-[60px] justify-between rounded-xl bg-background border-border"
-                        onClick={handleTokenSelectorClick}
-                        disabled={!watch('selectedFriend') || !!currentQuote}
-                      >
-                        <div className="flex items-center gap-2">
-                          <TokenNetworkDisplay
-                            tokenAddress={field.value?.token?.address}
-                            chainId={field.value?.chain?.id}
-                            size="md"
-                          />
-                          <span className="text-lg">{field.value?.token?.symbol || 'Select payment method'}</span>
-                        </div>
-                        <ChevronsUpDown className="h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Show Get Quote button when no quote is present */}
-              {!currentQuote && (
-                <div className="relative w-full">
-                  <ProgressButton
-                    type="submit"
-                    className="h-14 text-lg font-medium bg-secondary text-foreground disabled:opacity-50"
-                    isLoading={isLoadingQuote}
-                    loadingText="Getting quote..."
-                    disabled={isLoadingQuote || !isConnected || !watch('settlementDetails')}
-                  >
-                    Pay
-                  </ProgressButton>
-                </div>
+                      <Input
+                        placeholder="0.00"
+                        className="pl-7"
+                        {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                        }}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-            </form>
+            />
+          ) : (
+            // Hidden field to store the preset amount
+            <input type="hidden" name="amount" value={presetAmount} />
+          )}
 
-            {/* Show payment confirmation when quote is available */}
-            {currentQuote && (
-              <PaymentConfirmation
-                quote={currentQuote}
-                recipientName={form.getValues('selectedFriend')?.name || ''}
-                isProcessing={isProcessingTransaction}
-                onConfirm={handleConfirmedTransaction}
-                onCancel={() => {
-                  setCurrentQuote(null);
-                  setIsProcessingTransaction(false);
-                }}
-              />
-            )}
+          {/* Payment Method Selection */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Payment Method</label>
+            <div 
+              className="flex items-center justify-between p-3 border rounded-md cursor-pointer hover:bg-secondary/10"
+              onClick={() => setShowTokenSelector(true)}
+            >
+              {watch('settlementDetails')?.token ? (
+                <div className="flex items-center gap-2">
+                  <img 
+                    src={watch('settlementDetails')?.token?.logoUrl || '/tokens/default.svg'} 
+                    alt={watch('settlementDetails')?.token?.symbol} 
+                    className="w-6 h-6 rounded-full"
+                  />
+                  <span>{watch('settlementDetails')?.token?.symbol}</span>
+                  <span className="text-muted-foreground">on</span>
+                  <img 
+                    src={watch('settlementDetails')?.chain?.logoUrl || '/chains/default.svg'} 
+                    alt={watch('settlementDetails')?.chain?.name} 
+                    className="w-6 h-6 rounded-full"
+                  />
+                  <span>{watch('settlementDetails')?.chain?.name}</span>
+                </div>
+              ) : (
+                <span className="text-muted-foreground">Select token</span>
+              )}
+              <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
+            </div>
           </div>
+
+          {/* Show Get Quote button when no quote is present */}
+          {!currentQuote && (
+            <div className="relative w-full">
+              <ProgressButton
+                onClick={form.handleSubmit(onSubmit)}
+                disabled={!watch('settlementDetails')?.token || isLoadingQuote || isProcessingTransaction}
+                isLoading={isLoadingQuote || isProcessingTransaction}
+                className="w-full"
+              >
+                {isLoadingQuote ? 'Getting Quote...' : 
+                 isProcessingTransaction ? 'Processing...' : 'Generate Payment'}
+              </ProgressButton>
+            </div>
+          )}
         </div>
       </Form>
+
+      {/* Add this to render the PaymentConfirmation when a quote exists */}
+      {currentQuote && (
+        <PaymentConfirmation
+          quote={currentQuote}
+          recipientName={selectedFriend?.name || merchantData?.name || "Recipient"}
+          isProcessing={isProcessingTransaction}
+          onConfirm={handleConfirmPayment}
+          onCancel={handleCancelPayment}
+        />
+      )}
 
       <Dialog open={showFeeSaveDialog} onOpenChange={setShowFeeSaveDialog}>
         <DialogContent className="sm:max-w-md bg-[#161616] border-none">
