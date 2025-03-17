@@ -609,6 +609,13 @@ export function SettleForm({
     setCurrentQuote(null);
   };
 
+  useEffect(() => {
+    // Initialize form with preset amount if provided
+    if (presetAmount && form) {
+      form.setValue('amount', presetAmount.toString());
+    }
+  }, [presetAmount, form]);
+
   return (
     <>
       <Form {...form}>
@@ -683,8 +690,8 @@ export function SettleForm({
                 isLoading={isLoadingQuote || isProcessingTransaction}
                 className="w-full"
               >
-                {isLoadingQuote ? 'Getting Quote...' : 
-                 isProcessingTransaction ? 'Processing...' : 'Generate Payment'}
+                {isLoadingQuote ? 'Preparing...' : 
+                 isProcessingTransaction ? 'Processing...' : 'Pay'}
               </ProgressButton>
             </div>
           )}
