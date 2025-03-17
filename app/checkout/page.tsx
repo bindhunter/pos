@@ -1,7 +1,7 @@
 // commerce/app/checkout/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { TokenList } from '@/components/token-list';
 import { PaymentConfirmation } from '@/components/payment-confirmation';
@@ -14,7 +14,8 @@ import { toast } from 'sonner';
 import { ChainId } from '@/constants/ChainToken';
 import { useAutoChainSwitch } from '@/hooks/use-chain-switch';
 
-export default function CheckoutPage() {
+// Create a component that uses useSearchParams
+function CheckoutContent() {
   const searchParams = useSearchParams();
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -193,3 +194,35 @@ export default function CheckoutPage() {
     </div>
   );
 }
+
+// Loading fallback component
+function CheckoutLoading() {
+  return (
+    <div className="container max-w-md mx-auto py-8 px-4 flex items-center justify-center min-h-[50vh]">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+        <p>Loading payment details...</p>
+      </div>
+    </div>
+  );
+}
+
+// Main page component with Suspense boundary
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<CheckoutLoading />}>
+      <CheckoutContent />
+    </Suspense>
+  );
+}
+
+export const metadata = {
+  title: 'Your App Title',
+  description: 'Your app description',
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+};
